@@ -1,4 +1,6 @@
 JCOpenPGP
 =========
 
-Extending OpenPGPCard implementation for JavaCard 
+Extending OpenPGPCard implementation for JavaCard
+-------------------------------------------------
+
