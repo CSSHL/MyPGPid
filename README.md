@@ -1,5 +1,5 @@
-JCOpenPGP
-=========
+MyPGPid
+=======
 
 Extending OpenPGPCard implementation for JavaCard
 -------------------------------------------------
