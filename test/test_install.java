@@ -37,7 +37,7 @@ public class test_install extends TestCase {
 
             // Search for install command and expected response
             String result = readFileAsString("test\\install_log_gpshell.txt");
-            Pattern pattern = Pattern.compile("Wrapped command --> 84E60C00[0-9A-F.]+?[\r\n]+Response <-- 009000");
+            Pattern pattern = Pattern.compile("Wrapped command --> 84E60C00[0-9A-F.]+?\r*\nResponse <-- 009000");
             Matcher matcher = pattern.matcher(result);
             
             if (matcher.find()) {
