@@ -8,7 +8,7 @@ import java.io.FileReader;
 import java.io.IOException;
 
 public class searchfile {
-    public static void search(String fileName) {
+    public static void search(String fileName, String value) {
         try {
 	            // Open the file c:\test.txt as a buffered reader
 	            BufferedReader bf = new BufferedReader(new FileReader("c:\\test.txt"));
@@ -18,14 +18,14 @@ public class searchfile {
 	                String line;
 	 
 	            // Let the user know what we are searching for
-	            System.out.println("Searching for " + args[0] + " in file...");
+	            System.out.println("Searching for " + value + " in file...");
 	 
 	            // Loop through each line, stashing the line into our line variable.
 	            while (( line = bf.readLine()) != null)
 	            {
 	                    // Increment the count and find the index of the word
 	                    linecount++;
-	                    int indexfound = line.indexOf(args[0]);
+	                    int indexfound = line.indexOf(value);
 	 
 	                    // If greater than -1, means we found the word
 	                    if (indexfound > -1) {

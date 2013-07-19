@@ -6,12 +6,15 @@
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.regex.Matcher;
 import junit.framework.TestCase;
+import java.util.regex.Pattern;
 /**
  *
  * @author petr
  */
 public class test_install extends TestCase {
+    final static int INSTALL_WAIT_TIME = 10000;
     
     public test_install(String testName) {
         super(testName);
@@ -30,11 +33,16 @@ public class test_install extends TestCase {
         try {
             // Run bat file for on-card installation
             Runtime.getRuntime().exec("cmd /c start test\\install.bat");
-            
-            String result = readFileAsString("test\\install_log_gpshell.txt");
+            Thread.sleep(INSTALL_WAIT_TIME);
+
             // Search for install command and expected response
-            if (result.matches("Wrapped command --> 84E60C00.*Response <-- 009000")) {
+            String result = readFileAsString("test\\install_log_gpshell.txt");
+            Pattern pattern = Pattern.compile("Wrapped command --> 84E60C00[0-9A-F.]+?[\r\n]+Response <-- 009000");
+            Matcher matcher = pattern.matcher(result);
+            
+            if (matcher.find()) {
                 // OK, sucesfully installed
+                System.out.println(" applet sucesfully installed");
             }
             else {
                 // Failed to install
@@ -44,9 +52,9 @@ public class test_install extends TestCase {
         catch (IOException ex) {
             assertTrue(false);
         }
-
-        // Parse output log, determine result
-        assertTrue(false);
+        catch (InterruptedException ex) {
+            assertTrue(false);
+        }
     }
 /*    
     public void testSelect() {
