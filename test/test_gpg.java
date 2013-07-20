@@ -3,6 +3,9 @@
  * and open the template in the editor.
  */
 
+import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import junit.framework.TestCase;
 
 /**
@@ -10,6 +13,8 @@ import junit.framework.TestCase;
  * @author petr
  */
 public class test_gpg extends TestCase {
+    final static String CMD_LOG_FILE_GPG_CARDSTATUS = "cmd_log_gpg_cardstatus.txt";
+
     
     public test_gpg(String testName) {
         super(testName);
@@ -27,9 +32,31 @@ public class test_gpg extends TestCase {
     }
     public void test_gpg_card_status() {
         System.out.println("* test_gpg_card_status()");
-        // Run bat file for gpg --card-status
-        // Parse output log, determine result
-        assertTrue(false);
+        try {
+            // Run bat file for on-card installation
+            //String cmdCommand = "cmd /c start test\\gpg_cardstatus.bat " + CMD_LOG_FILE_GPG_CARDSTATUS;
+            //String cmdCommand = "cmd /C \"echo TEST > testik";
+            String cmdCommand = TestShared.formatCardPersonalizedCmdBatString("gpg_cardstatus.bat", "", CMD_LOG_FILE_GPG_CARDSTATUS);
+            StringBuilder stdErr = new StringBuilder(); 
+            int exitVal = TestShared.executeShellCommand(cmdCommand, stdErr);
+            String stdOut = TestShared.readFileAsString(TestShared.formatCardPersonalizedOutputLogFilePath(CMD_LOG_FILE_GPG_CARDSTATUS));
+
+            // Search for 'Signature key ....:' string from --card-status output
+            Pattern pattern = Pattern.compile("Signature key ....:");
+            Matcher matcher = pattern.matcher(stdOut);
+
+            if ((exitVal == 0) && matcher.find()) {
+                // OK, sucesfully installed
+                System.out.println(" --card-status output detected");
+            }
+            else {
+                // Failed to display info
+                assertTrue(false);
+            }
+        }
+        catch (IOException ex) {
+            assertTrue(false);
+        }
     }      
     public void test_gpg_changePIN() {
         System.out.println("* test_gpg_changePIN()");

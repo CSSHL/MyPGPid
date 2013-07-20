@@ -5,8 +5,8 @@ nbproject/build-impl.xml
 nbproject/genfiles.properties
 manifest.mf
 *.class
-
-
+test/install_log_gpshell.txt
+test/logs/
 
 
 #################
