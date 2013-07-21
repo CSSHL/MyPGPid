@@ -88,11 +88,24 @@ public class TestShared {
         return OUTPUT_LOG_BASE_PATH + "\\" + TARGET_CARD_NAME + "_" + outputLogFile;
     }    
     
-    public static boolean assertRegexAndExitVal(String output, String regex, int exitVal) {
+    public static String executeShellCommandWithOutput(String command, String logFileName) {
+        try {
+            StringBuilder stdErr = new StringBuilder();
+            int exitVal = TestShared.executeShellCommand(command, stdErr);
+            if (exitVal != 0) { return ""; }
+            String stdOut = TestShared.readFileAsString(TestShared.formatCardPersonalizedOutputLogFilePath(logFileName));
+
+            return stdOut;
+        }
+        catch (IOException ex) {
+            return "";
+        }
+    }
+    public static boolean isRegexInOutput(String output, String regex) {
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(output);
 
-        if ((exitVal == 0) && matcher.find()) {
+        if (matcher.find()) {
             return true;
         }
         else {

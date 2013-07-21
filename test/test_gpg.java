@@ -14,6 +14,8 @@ import junit.framework.TestCase;
  */
 public class test_gpg extends TestCase {
     final static String CMD_LOG_FILE_GPG_CARDSTATUS = "cmd_log_gpg_cardstatus.txt";
+    final static String CMD_LOG_FILE_GPG_GENERATERSA1024 = "cmd_log_gpg_generateRSA1024.txt";
+    
 
     
     public test_gpg(String testName) {
@@ -32,31 +34,13 @@ public class test_gpg extends TestCase {
     }
     public void test_gpg_card_status() {
         System.out.println("* test_gpg_card_status()");
-        try {
-            // Run bat file for on-card installation
-            //String cmdCommand = "cmd /c start test\\gpg_cardstatus.bat " + CMD_LOG_FILE_GPG_CARDSTATUS;
-            //String cmdCommand = "cmd /C \"echo TEST > testik";
-            String cmdCommand = TestShared.formatCardPersonalizedCmdBatString("gpg_cardstatus.bat", "", CMD_LOG_FILE_GPG_CARDSTATUS);
-            StringBuilder stdErr = new StringBuilder(); 
-            int exitVal = TestShared.executeShellCommand(cmdCommand, stdErr);
-            String stdOut = TestShared.readFileAsString(TestShared.formatCardPersonalizedOutputLogFilePath(CMD_LOG_FILE_GPG_CARDSTATUS));
+        // Run bat file for gpg --card-status
+        String cmdCommand = TestShared.formatCardPersonalizedCmdBatString("gpg_cardstatus.bat", "", CMD_LOG_FILE_GPG_CARDSTATUS);
+        String output = TestShared.executeShellCommandWithOutput(cmdCommand, CMD_LOG_FILE_GPG_CARDSTATUS);
+        // Search for 'Signature key ....:' string from --card-status output
+        assertTrue(TestShared.isRegexInOutput(output,  
+            "Signature key ....:"));            
 
-            // Search for 'Signature key ....:' string from --card-status output
-            Pattern pattern = Pattern.compile("Signature key ....:");
-            Matcher matcher = pattern.matcher(stdOut);
-
-            if ((exitVal == 0) && matcher.find()) {
-                // OK, sucesfully installed
-                System.out.println(" --card-status output detected");
-            }
-            else {
-                // Failed to display info
-                assertTrue(false);
-            }
-        }
-        catch (IOException ex) {
-            assertTrue(false);
-        }
     }      
     public void test_gpg_changePIN() {
         System.out.println("* test_gpg_changePIN()");
@@ -67,8 +51,11 @@ public class test_gpg extends TestCase {
     public void test_gpg_generate_RSA1024() {
         System.out.println("* test_gpg_generate_RSA1024()");
         // Run bat file for gpg key generation
-        // Parse output log, determine result
-        assertTrue(false);
+        String cmdCommand = TestShared.formatCardPersonalizedCmdBatString("gpg_cardedit_generateRSA1024.bat", "", CMD_LOG_FILE_GPG_GENERATERSA1024);
+        String output = TestShared.executeShellCommandWithOutput(cmdCommand, CMD_LOG_FILE_GPG_GENERATERSA1024);
+        // Search for xxx
+        assertTrue(TestShared.isRegexInOutput(output,  
+            "Signature key ....:"));     
     }    
     public void test_gpg_sign_RSA1024() {
         System.out.println("* test_gpg_sign_RSA1024()");

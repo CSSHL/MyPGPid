@@ -28,31 +28,12 @@ public class test_install extends TestCase {
     
     public void testInstall() {
         System.out.println("* MyPGPid:testInstall()");
-        try {
-            // Run bat file for on-card installation
-            //String cmdCommand = "cmd /c start test\\gpshell_install.bat " + "install_" + TestShared.TARGET_CARD_NAME + ".txt " + CMD_LOG_FILE_INSTALL;
-            String cmdCommand = TestShared.formatCardPersonalizedCmdBatString("gpshell_install.bat", "install_" + TestShared.TARGET_CARD_NAME + ".txt", CMD_LOG_FILE_INSTALL);
-            StringBuilder stdErr = new StringBuilder(); 
-            int exitVal = TestShared.executeShellCommand(cmdCommand, stdErr);
-            String stdOut = TestShared.readFileAsString(TestShared.formatCardPersonalizedOutputLogFilePath(CMD_LOG_FILE_INSTALL));
-
-            // Search for install command and expected response 0x9000
-            Pattern pattern = Pattern.compile("Wrapped command --> 84E60C00[0-9A-F.]+?\r*\nResponse <-- 009000");
-            Matcher matcher = pattern.matcher(stdOut);
-            
-            if ((exitVal == 0) && matcher.find()) {
-                // OK, sucesfully installed
-                System.out.println(" applet sucesfully installed");
-            }
-            else {
-                // Failed to install
-                assertTrue(false);
-                System.out.println(stdOut);
-            }
-        }
-        catch (IOException ex) {
-            assertTrue(false);
-        }
+        // Run bat file for on-card installation
+        String cmdCommand = TestShared.formatCardPersonalizedCmdBatString("gpshell_install.bat", "install_" + TestShared.TARGET_CARD_NAME + ".txt", CMD_LOG_FILE_INSTALL);
+        String output = TestShared.executeShellCommandWithOutput(cmdCommand, CMD_LOG_FILE_INSTALL);
+        // Search for install command and expected response 0x9000
+        assertTrue(TestShared.isRegexInOutput(output, 
+                "Wrapped command --> 84E60C00[0-9A-F.]+?\r*\nResponse <-- 009000"));
     }
 /*    
     public void testSelect() {
