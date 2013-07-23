@@ -1,2 +1,2 @@
-gpg.exe --card-edit < gpg_cardedit_generateRSA1024.stdin 
+powershell .\gpg_cardedit_generateRSA1024_stdin.ps1
 exit
