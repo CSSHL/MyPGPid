@@ -1,0 +1,119 @@
+Hi,
+
+Here some notes on the setup of my gpg card with 2048bit, and the
+different problems I meet with workarounds:
+---
+1) I could generate 1024 keys on card, but no 2048 keys. Setup is a
+ACR38U reader on a 32-bit linux system (Debian, Testing, 2.6.35.1) !?
+
+Generation stopped after 10-20sec with error message: "Key generation
+failed: general error"
+
+=> Curiously! with the same hw running AMD64 I could generate 2048
+keys on card with the same ACR38U !? I don't know why ... maybe some
+USB problem with the ACR38U.
+
+2) The encryption key, due to gpg issue #1230, is currently set to 1024
+bit.
+3) A backup of the encryption key is saved (on choice) during
+generation, but not of the signing and auth key.
+---
+
+The following describes an experimental way and patch for gpg 1.4.10,
+which allowed me to work around this.
+
+=> Only try if you feel experimental as well ;)! No guarantees !!
+
+=> Maybe this is also (partly) none-sense: no guarantees either, but
+comments are highly welcome then ;) !!
+
+So what the patch below does is the following:
+---
+a) It uses the gen_card_key_with_backup() function for all three keys
+in keygen.c
+b) Sets the keys size to 2048 (hardcoded)
+---
+
+=> This solved my problems 2) and 3) ... and, since the keys are now
+generate in software by gpg (not on the card anymore), it also works
+around my problem 1).
+
+The final result is a gpg card with:
+
+* All three keys (signing, encr, auth) are now 2048 RSA
+* Backups of all keys, which allows to create a full backup card
+
+To create an initial card + backup card, the following are the steps:
+
+I) Setup the initial card:
+---
+1) Patch gpg 1.4.10 and build
+
+2) Generate the keys (generate command), choose 2048 key size
+
+        gpg.patched --card-edit
+        admin
+        generate
+
+Info: The "passphrase" question is the passphrase, that gpg will use to
+protect the backup keys stored on disc!
+
+=> During generation note the names of the backup files in sequence of
+the keys generated. The sequence is the following:
+
+        1st) Signing key: sk_rst....gpg
+        2nd) Auth key: sk_uvw....gpg
+        3rd) Encr key: sk_xyz....gpg
+
+Info: If the card refuses the new keys, do first a 'normal' generate,
+on card, using a none patched gpg, with 1024 key sizes. This seems to
+reset things.
+---
+
+II) Setup a backup card
+---
+1) Put the keys on the card from the created backup-files, using the
+'bkuptocard' command
+
+        gpg --edit-key XYZ...
+        toggle
+        bkuptocard sk_rst....gpg
+        bkuptocard sk_uvw....gpg
+        bkuptocard sk_xyz....gpg
+       
+=> Choose the right key-type (1,2 or 3) using the sequence noted before!
+
+Info: Also here, if the card refuses the new keys, do a 'normal'
+generate, on card, with a none patched gpg, with 1024 key sizes. This
+seems to reset things.
+
+2) Now ATTENTION: !!! Your secret key backups are still all on disc !!!
+
+Depending on the 'passphrase' you gave them during the key generation,
+your secret keys are now more ???OR MAYBE LESS??? protected!
+
+If e.g. your passphrase was just a 6 digit-pin code, then their
+protection is very low, because there is no chip around them anymore,
+that can lock them away after three retries!
+
+=> Therefore: Either a) shred them, then no more backups possible: the
+key once on the card can't be recovered or b) store them away in a safe
+place!
+---
+
+III) Using the backup card
+---
+In the gpg key-ring a 'stub' is pointing gpg to the card for the secret
+keys, and verifies the card serial number for this. The serial-number
+verification will fail with the backup card.
+
+To use the backup card with an existing installation, you need to:
+
+1) Delete the secret-key, which is in fact just the stub:
+
+        gpg --delete-secret-key XYZ...
+       
+2) And let gpg setup a new stub to the backup card, by an --card-status
+
+        gpg --card-status
+---
