@@ -25,17 +25,16 @@
  */
 
 /*
- * Package AID: 0xD2:0x76:0x00:0x01:0x24:0x01:0x01:0x01:0xFF:0xFF:0x00:0x00:0x00:0x01:0x00:0x00
- * Applet AID:  0xD2:0x76:0x00:0x01:0x24:0x01:0x01:0x01
+ * Package AID:  0xD2:0x76:0x00:0x01:0x24:0x01:0x01:0x01
+ * AppletAID: 0xD2:0x76:0x00:0x01:0x24:0x01:0x01:0x01:0x00:0x00:0x00:0x00:0x00:0x01:0x00:0x00
  */
 
 
 package MyPGPid;
 
 
-//TODO: implement standard 1.0 put data - private keys (used by GPG)
+//TODO: implement standard 2.0 put data - private keys (used by GPG)
 //TODO: implement export of private key after key generation
-//TODO: implement import of private key 
 
 import javacard.framework.*;
 import javacard.security.*;
@@ -43,7 +42,7 @@ import javacardx.crypto.*;
 
 /**
  *
- * @author stelin
+ * @author Diego, Petr
  */
 public class MyPGPid extends Applet {
     // Odd high nibble in CLA means 'chaining'
@@ -80,6 +79,7 @@ public class MyPGPid extends Applet {
     final static short DO_NAME = (short)0x005b;
     final static short DO_LANGUAGE = (short)0x5f2d;
     final static short DO_SEX = (short)0x5f35;
+    final static short DO_HISTORICAL = (short)0x5f52;
     final static short DO_APPLICATION_DATA = (short)0x006E;
     final static short DO_AID = (short)0x004f;
     final static short DO_DISCRETIONARY_DATA = (short)0x0073;
@@ -113,7 +113,6 @@ public class MyPGPid extends Applet {
     final static short SW_SUCCESS = (short)0x9000;
     /* Constants and default values */
 
-    final static short KEY_LENGTH = (short)1024;
     final static byte CHV1_LENGTH = (byte)32;
     final static byte CHV2_LENGTH = (byte)32;
     final static byte CHV3_LENGTH = (byte)32;
@@ -122,7 +121,7 @@ public class MyPGPid extends Applet {
     final static byte[] DEFAULT_CHV2 = {(byte)0x31, (byte)0x32, (byte)0x33, (byte)0x34, (byte)0x35, (byte)0x36 };
     final static byte[] DEFAULT_CHV3 = {(byte)0x31, (byte)0x32, (byte)0x33, (byte)0x34, (byte)0x35, (byte)0x36, (byte)0x37, (byte)0x38 };
 
-    final static byte[] DEFAULT_AID = {(byte)0xD2, (byte)0x76, (byte)0x00, (byte)0x01, (byte)0x24, (byte)0x01, (byte)0x01, (byte)0x01, (byte)0xFF, (byte)0xFF, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01, (byte)0x00, (byte)0x00};
+    final static byte[] DEFAULT_AID = {(byte)0xD2, (byte)0x76, (byte)0x00, (byte)0x01, (byte)0x24, (byte)0x01, (byte)0x01, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01, (byte)0x00, (byte)0x00};
 
 
     private OwnerPIN chv1;
@@ -142,6 +141,8 @@ public class MyPGPid extends Applet {
     private byte[] algAttrSign = { (byte)0xc1, (byte)0x05, (byte)0x01,(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20 };
     private byte[] algAttrDec = { (byte)0xc2, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20 };
     private byte[] algAttrAuth = { (byte)0xc3, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20 };
+    // Card capabilities are encoded in historical bytes as defined 8.3.6 Card capabilities (http://www.cardwerk.com/smartcards/smartcard_standard_ISO7816-4_8_historical_bytes.aspx)
+    private byte[] histBytes = { (byte)0x80, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x40}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities, 3B length, 0x40 == extended lc/le supported
     private DataObject fingerprints;
     private DataObject fingerprintsCA;
     private DataObject dateGeneration;
@@ -167,14 +168,13 @@ public class MyPGPid extends Applet {
 
     // *** Card-specific configuration: decomment only one section
     // JCOP
-//    final static byte  DEF_ALG = KeyPair.ALG_RSA_CRT;
-//    final static short DEF_LEN = (short)2048;	// bits
-//    final static short DEF_CAKEYTYPE = KeyBuilder.TYPE_RSA_PUBLIC;
-
+    final static byte  DEF_ALG = KeyPair.ALG_RSA_CRT;
+    final static short DEF_KEY_LEN = (short) 2048;	// bits
+    final static short DEF_CAKEYTYPE = KeyBuilder.TYPE_RSA_PUBLIC;
     // G+D SmartCafé Expert
-    final static byte  DEF_ALG = KeyPair.ALG_RSA;
-    final static short DEF_LEN = (short)2048;	// bits
-    final static byte  DEF_CAKEYTYPE = KeyBuilder.TYPE_RSA_PUBLIC;
+//    final static byte  DEF_ALG = KeyPair.ALG_RSA;
+//    final static short DEF_KEY_LEN = (short) 2048;	// bits
+//    final static byte  DEF_CAKEYTYPE = KeyBuilder.TYPE_RSA_PUBLIC;
 
     // *** Extended function support
     private KeyPair[]	m_keyPair = null;	// Keeps all key pairs
@@ -279,12 +279,9 @@ public class MyPGPid extends Applet {
             fingerprintsCA = new DataObject((byte)00, (byte)0xc6, (short)60, true);
             dateGeneration = new DataObject((byte)00, (byte)0xcd, (short)12, true);
             signCount = new DataObject((byte)0, (byte)0x93, (short)3, true);
-            keySign = new KeyPair(KeyPair.ALG_RSA_CRT, KEY_LENGTH);
-            keyDecrypt = new KeyPair(KeyPair.ALG_RSA_CRT, KEY_LENGTH);
-            keyAuth = new KeyPair(KeyPair.ALG_RSA_CRT, KEY_LENGTH);
-    //        keySign = new KeyPair(KeyPair.ALG_RSA, KEY_LENGTH);
-    //        keyDecrypt = new KeyPair(KeyPair.ALG_RSA, KEY_LENGTH);
-    //        keyAuth = new KeyPair(KeyPair.ALG_RSA, KEY_LENGTH);
+            keySign = new KeyPair(DEF_ALG, DEF_KEY_LEN);
+            keyDecrypt = new KeyPair(DEF_ALG, DEF_KEY_LEN);
+            keyAuth = new KeyPair(DEF_ALG, DEF_KEY_LEN);
             chv1 = new OwnerPIN(CHV_RETRY, CHV1_LENGTH);
             chv2 = new OwnerPIN(CHV_RETRY, CHV2_LENGTH);
             chv3 = new OwnerPIN(CHV_RETRY, CHV3_LENGTH);
@@ -296,9 +293,16 @@ public class MyPGPid extends Applet {
             cipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
             random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
             tmpData = JCSystem.makeTransientByteArray((short)512, JCSystem.CLEAR_ON_DESELECT);
-            Util.setShort(algAttrSign, (short)3, KEY_LENGTH);
-            Util.setShort(algAttrDec, (short)3, KEY_LENGTH);
-            Util.setShort(algAttrAuth, (short)3, KEY_LENGTH);
+            
+            // Set proper Algorithm Attributes according to defined preferences
+            Util.setShort(algAttrSign, (short)3, DEF_KEY_LEN);
+            Util.setShort(algAttrDec, (short)3, DEF_KEY_LEN);
+            Util.setShort(algAttrAuth, (short)3, DEF_KEY_LEN);
+            algAttrSign[5] = (DEF_ALG == KeyPair.ALG_RSA) ? (byte) 0x01 : (byte) 0x03;
+            algAttrDec[5] = (DEF_ALG == KeyPair.ALG_RSA) ? (byte) 0x01 : (byte) 0x03;
+            algAttrAuth[5] = (DEF_ALG == KeyPair.ALG_RSA) ? (byte) 0x01 : (byte) 0x03;
+            
+                   
             // END ORIGINAL CODE FROM JOpenPGPCard
             
 	    // Register OP2 applet
@@ -328,8 +332,9 @@ public class MyPGPid extends Applet {
         boolean status = false;
 
         // ignore the applet select command dispached to the process
-        if (selectingApplet())
+        if (selectingApplet()) {
             return;
+        }
 
         buffer[ISO7816.OFFSET_CLA] = (byte)(buffer[ISO7816.OFFSET_CLA] & (byte)0xFC);
 
@@ -337,7 +342,7 @@ public class MyPGPid extends Applet {
             if (remainingDataLength <= 0) {
                 ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
             }
-            else sendData(apdu, tmpData, remainingDataLength);
+            else { sendData(apdu, tmpData, remainingDataLength);} 
             return;
         } else {
             remainingDataLength = 0;
@@ -354,8 +359,7 @@ public class MyPGPid extends Applet {
                 putData(apdu);
                 return;
             case VERIFY:
-                if (buffer[ISO7816.OFFSET_P1] != 0)
-                    ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
+                if (buffer[ISO7816.OFFSET_P1] != 0) { ISOException.throwIt(ISO7816.SW_WRONG_P1P2); }
                 lc = apdu.setIncomingAndReceive();
                 if (lc == 0) {
                     ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
@@ -382,8 +386,7 @@ public class MyPGPid extends Applet {
                     default:
                         ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
                 }
-                if (!status)
-                    ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+                if (!status) { ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);}
                 return;
             case GENERATE_ASYMMETRIC_KEY_PAIR:
                 generateAssymetricKeyPair(apdu);
@@ -463,6 +466,10 @@ public class MyPGPid extends Applet {
                 buffer[0] = sex.getData()[0];
                 apdu.setOutgoingAndSend((short)0, (short)1);
                 return;
+            case DO_HISTORICAL:
+                Util.arrayCopy(histBytes, (short)0, buffer, (short)0, (short) (histBytes.length));
+                apdu.setOutgoingAndSend((short)0, (short) (histBytes.length));
+                return;
             case DO_CARDHOLDER_DATA:
                 len = getCardholderData(tmpData, (byte)0);
                 sendData(apdu, tmpData, len);
@@ -485,7 +492,7 @@ public class MyPGPid extends Applet {
                 //sendData(apdu, tmpData, (short) DEFAULT_AID.length);
                 return;
             case DO_EXTENDED_CAPABILITIES:
-                Util.arrayCopy(extendedCap, (short)2, buffer, (short)0, (short)1);
+                Util.arrayCopy(extendedCap, (short)2, buffer, (short)0, (short) (short) (extendedCap.length - 2));
                 apdu.setOutgoingAndSend((short)0, (short)1);
                 return;
             case DO_ALG_ATTR_SIGN:
@@ -574,8 +581,8 @@ public class MyPGPid extends Applet {
     private short getDiscData(byte[] buffer, short offset) {
         short len = offset;
 
-        Util.arrayCopy(extendedCap, (short)0, buffer, (short)len, (short)3);
-        len += 3;
+        Util.arrayCopy(extendedCap, (short)0, buffer, (short)len, (short) extendedCap.length);
+        len += (short) extendedCap.length;
         Util.arrayCopy(algAttrSign, (short)0, buffer, (short)len, (short)7);
         len += 7;
         Util.arrayCopy(algAttrDec, (short)0, buffer, (short)len, (short)7);
@@ -596,7 +603,7 @@ public class MyPGPid extends Applet {
         short p1p2 = Util.makeShort(buffer[ISO7816.OFFSET_P1], buffer[ISO7816.OFFSET_P2]);
         short lc = (short)(buffer[ISO7816.OFFSET_LC] & 0x00FF);
         short l;
-        short len = 0;
+        short len;
 
         len = receiveData(apdu, tmpData);
         if (p1p2 == DO_OPTIONAL1) {
@@ -802,8 +809,7 @@ public class MyPGPid extends Applet {
                 if (!chv1.isValidated()) {
                     ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
                 }
-                if (!chv)
-                    chv1.reset();
+                if (!chv) { chv1.reset(); }
                 len = receiveData(apdu, tmpData);
                 sig.init(keySign.getPrivate(), Cipher.MODE_ENCRYPT);
                 len = sig.doFinal(tmpData, (short)0, len, tmpData, (short)0);
@@ -956,7 +962,7 @@ public class MyPGPid extends Applet {
         byte[] buffer = apdu.getBuffer();
         short lc = (short)(buffer[ISO7816.OFFSET_LC] & 0x00FF);
         short l;
-        short len = 0;
+        short len;
 
         if (lc > 254) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -1063,7 +1069,7 @@ public class MyPGPid extends Applet {
      */
     private boolean usingRF(APDU apdu)
     {
-	short media=(short)(apdu.getProtocol() & (short)APDU.PROTOCOL_MEDIA_MASK);
+	short media=(short)(APDU.getProtocol() & (short)APDU.PROTOCOL_MEDIA_MASK);
 	return (media==APDU.PROTOCOL_MEDIA_CONTACTLESS_TYPE_A) ||
 		(media==APDU.PROTOCOL_MEDIA_CONTACTLESS_TYPE_B);
     }
@@ -1099,8 +1105,9 @@ public class MyPGPid extends Applet {
 
     private void KeyPush(APDU apdu)
     {
-	if(usingRF(apdu)) // Just for testing
+	if(usingRF(apdu)) { // Just for testing
 	    ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
+        }
         ISOException.throwIt( ISO7816.SW_INS_NOT_SUPPORTED ) ;
     }
     
