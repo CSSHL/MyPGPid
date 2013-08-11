@@ -21,8 +21,8 @@
  */
 
 /*
- * Package AID:  0xD2:0x76:0x00:0x01:0x24:0x01:0x01:0x01
- * AppletAID: 0xD2:0x76:0x00:0x01:0x24:0x01:0x02:0x00:0x00:0x00:0x00:0x00:0x00:0x01:0x00:0x00
+ * Package AID:  0xD2:0x76:0x00:0x01:0x24:0x01:0x02:0x00
+ * AppletAID:    0xD2:0x76:0x00:0x01:0x24:0x01:0x02:0x00:0x00:0x00:0x00:0x00:0x00:0x01:0x00:0x00
  */
 
 
@@ -30,7 +30,7 @@ package MyPGPid;
 
 
 //TODO: implement standard 2.0 put data - private keys (used by GPG)
-//TODO: implement export of private key after key generation
+//TODO: implement export of private key after key generation (to backup card)
 
 import javacard.framework.*;
 import javacard.security.*;
@@ -59,7 +59,7 @@ public class MyPGPid extends Applet {
     final static byte GET_CHALLENGE = (byte)0x84;
     final static byte ENVELOPE = (byte)0xc2;
 
-    final static byte EXPORT_KEY_PAIR = (byte)0x05;
+    // final static byte EXPORT_KEY_PAIR = (byte)0x05;
 
     final static byte INS_CARD_READ_POLICY           = (byte) 0x70;
     final static byte INS_CARD_KEY_PUSH              = (byte) 0x72;
@@ -102,6 +102,7 @@ public class MyPGPid extends Applet {
     final static short DO_PRIVATE_SIGNATURE_KEY = (short)0x00e0;
     final static short DO_PRIVATE_DECRYPTION_KEY = (short)0x00e1;
     final static short DO_PRIVATE_AUTHENTIFICATION__KEY = (short)0x00e2;
+
     /* Response codes */
     final static short SW_PIN_BLOCKED = (short)0x6983;
     final static short SW_REFERENCED_DATA_NOT_FOUND = (short)0x6a88;
@@ -133,8 +134,10 @@ public class MyPGPid extends Applet {
     private DataObject langPref;
     private DataObject sex;
     private DataObject aid;
-    // 0xFC
-    private byte[] extendedCap = { (byte)0xc0, (byte)0x0a, (byte)0x24, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0xFF, (byte)0x00, (byte)0xFF};
+    // extendedCap[3] == 0x10 (Status byte changeable only) 
+    // extendedCap[3] == 0x34 (Support for Key Import, Status byte changeable only, Algorithm attributes changeable) 
+    // extendedCap[3] == 0xB4 (Secure Messaging supported, Support for Key Import, Status byte changeable only, Algorithm attributes changeable) 
+    private byte[] extendedCap = { (byte)0xc0, (byte)0x0a, (byte)0x10, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0xFF, (byte)0x00, (byte)0xFF};
     private byte[] algAttrSign = { (byte)0xc1, (byte)0x06, (byte)0x01,(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
     private byte[] algAttrDec = { (byte)0xc2, (byte)0x06, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
     private byte[] algAttrAuth = { (byte)0xc3, (byte)0x06, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
@@ -419,9 +422,9 @@ public class MyPGPid extends Applet {
                 apdu.setOutgoingLength(lc);
                 apdu.sendBytesLong(tmpData, (short) 0, lc);
                 return;
-            case EXPORT_KEY_PAIR:
+            //case EXPORT_KEY_PAIR:
                 //exportKeyPair(apdu);
-                return;
+                //return;
 
             case INS_CARD_READ_POLICY:
                 ReadPolicy(apdu); 
@@ -898,7 +901,7 @@ public class MyPGPid extends Applet {
      * the array specified by the buffer argument.
      * If the number of bytes to send as specified by the len parameter is
      * greater the 254, this method will automatically generate 61xx status
-     * bytes in the response to indicate more data avaible by GET_RESPONSE.
+     * bytes in the response to indicate more data available by GET_RESPONSE.
      * If the length is such as 61xx status is generated the data to be sent
      * MUST be located in tmpData, and tmpData MUST NOT be modified until all
      * data has been fetched or a command other the GET_RESPONSE is issued from
