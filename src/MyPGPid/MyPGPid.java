@@ -19,14 +19,10 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-/* BUGBUG - we must be able to select by 00 a4 04 00 06 d2 76 00 01 24 01
- * Package AID: 0xF9:0x4D:0x79:0x50:0x47:0x50:0x69:0x64:0x00:0x00 (F9 'MyPGPid' 00 00)
- * Applet AID:  0xF9:0x4D:0x79:0x50:0x47:0x50:0x69:0x64:0x30:0x31 (F9 'MyPGPid01')
- */
 
 /*
- * Package AID:  0xD2:0x76:0x00:0x01:0x24:0x01:0x01:0x01
- * AppletAID: 0xD2:0x76:0x00:0x01:0x24:0x01:0x01:0x01:0x00:0x00:0x00:0x00:0x00:0x01:0x00:0x00
+ * Package AID:  0xD2:0x76:0x00:0x01:0x24:0x01:0x02:0x00
+ * AppletAID:    0xD2:0x76:0x00:0x01:0x24:0x01:0x02:0x00:0x00:0x00:0x00:0x00:0x00:0x01:0x00:0x00
  */
 
 
@@ -34,7 +30,7 @@ package MyPGPid;
 
 
 //TODO: implement standard 2.0 put data - private keys (used by GPG)
-//TODO: implement export of private key after key generation
+//TODO: implement export of private key after key generation (to backup card)
 
 import javacard.framework.*;
 import javacard.security.*;
@@ -42,7 +38,7 @@ import javacardx.crypto.*;
 
 /**
  *
- * @author Diego, Petr
+ * @author Sten, Diego, Petr
  */
 public class MyPGPid extends Applet {
     // Odd high nibble in CLA means 'chaining'
@@ -63,7 +59,7 @@ public class MyPGPid extends Applet {
     final static byte GET_CHALLENGE = (byte)0x84;
     final static byte ENVELOPE = (byte)0xc2;
 
-    final static byte EXPORT_KEY_PAIR = (byte)0x05;
+    // final static byte EXPORT_KEY_PAIR = (byte)0x05;
 
     final static byte INS_CARD_READ_POLICY           = (byte) 0x70;
     final static byte INS_CARD_KEY_PUSH              = (byte) 0x72;
@@ -106,6 +102,7 @@ public class MyPGPid extends Applet {
     final static short DO_PRIVATE_SIGNATURE_KEY = (short)0x00e0;
     final static short DO_PRIVATE_DECRYPTION_KEY = (short)0x00e1;
     final static short DO_PRIVATE_AUTHENTIFICATION__KEY = (short)0x00e2;
+
     /* Response codes */
     final static short SW_PIN_BLOCKED = (short)0x6983;
     final static short SW_REFERENCED_DATA_NOT_FOUND = (short)0x6a88;
@@ -121,7 +118,7 @@ public class MyPGPid extends Applet {
     final static byte[] DEFAULT_CHV2 = {(byte)0x31, (byte)0x32, (byte)0x33, (byte)0x34, (byte)0x35, (byte)0x36 };
     final static byte[] DEFAULT_CHV3 = {(byte)0x31, (byte)0x32, (byte)0x33, (byte)0x34, (byte)0x35, (byte)0x36, (byte)0x37, (byte)0x38 };
 
-    final static byte[] DEFAULT_AID = {(byte)0xD2, (byte)0x76, (byte)0x00, (byte)0x01, (byte)0x24, (byte)0x01, (byte)0x01, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01, (byte)0x00, (byte)0x00};
+    final static byte[] DEFAULT_AID = {(byte)0xD2, (byte)0x76, (byte)0x00, (byte)0x01, (byte)0x24, (byte)0x02, (byte)0x00, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01, (byte)0x00, (byte)0x00};
 
 
     private OwnerPIN chv1;
@@ -137,12 +134,19 @@ public class MyPGPid extends Applet {
     private DataObject langPref;
     private DataObject sex;
     private DataObject aid;
-    private byte[] extendedCap = { (byte)0xc0, (byte)0x01, (byte)0xD8 };
-    private byte[] algAttrSign = { (byte)0xc1, (byte)0x05, (byte)0x01,(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20 };
-    private byte[] algAttrDec = { (byte)0xc2, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20 };
-    private byte[] algAttrAuth = { (byte)0xc3, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20 };
+    // extendedCap[3] == 0x10 (Status byte changeable only) 
+    // extendedCap[3] == 0x34 (Support for Key Import, Status byte changeable only, Algorithm attributes changeable) 
+    // extendedCap[3] == 0xB4 (Secure Messaging supported, Support for Key Import, Status byte changeable only, Algorithm attributes changeable) 
+    private byte[] extendedCap = { (byte)0xc0, (byte)0x0a, (byte)0x10, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0xFF, (byte)0x00, (byte)0xFF};
+    // BUGBUG: algAttrSign[7] == 0x01 will cause general fail during key generation (in PGP) 
+//    private byte[] algAttrSign = { (byte)0xc1, (byte)0x06, (byte)0x01,(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
+//    private byte[] algAttrDec = { (byte)0xc2, (byte)0x06, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
+//    private byte[] algAttrAuth = { (byte)0xc3, (byte)0x06, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
+    private byte[] algAttrSign = { (byte)0xc1, (byte)0x05, (byte)0x01,(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20};
+    private byte[] algAttrDec = { (byte)0xc2, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20};
+    private byte[] algAttrAuth = { (byte)0xc3, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20};
     // Card capabilities are encoded in historical bytes as defined 8.3.6 Card capabilities (http://www.cardwerk.com/smartcards/smartcard_standard_ISO7816-4_8_historical_bytes.aspx)
-    private byte[] histBytes = { (byte)0x80, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x40}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities, 3B length, 0x40 == extended lc/le supported
+    private byte[] histBytes = { (byte)0x80, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x40}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities & 3bytes length, 0x40 == extended lc/le supported
     private DataObject fingerprints;
     private DataObject fingerprintsCA;
     private DataObject dateGeneration;
@@ -422,9 +426,9 @@ public class MyPGPid extends Applet {
                 apdu.setOutgoingLength(lc);
                 apdu.sendBytesLong(tmpData, (short) 0, lc);
                 return;
-            case EXPORT_KEY_PAIR:
+            //case EXPORT_KEY_PAIR:
                 //exportKeyPair(apdu);
-                return;
+                //return;
 
             case INS_CARD_READ_POLICY:
                 ReadPolicy(apdu); 
@@ -492,19 +496,19 @@ public class MyPGPid extends Applet {
                 //sendData(apdu, tmpData, (short) DEFAULT_AID.length);
                 return;
             case DO_EXTENDED_CAPABILITIES:
-                Util.arrayCopy(extendedCap, (short)2, buffer, (short)0, (short) (short) (extendedCap.length - 2));
+                Util.arrayCopy(extendedCap, (short)2, buffer, (short)0, (short) (extendedCap.length - 2));
                 apdu.setOutgoingAndSend((short)0, (short)1);
                 return;
             case DO_ALG_ATTR_SIGN:
-                Util.arrayCopy(algAttrSign, (short)2, buffer, (short)0, (short)5);
+                Util.arrayCopy(algAttrSign, (short)2, buffer, (short)0, (short) (algAttrSign.length - 2));
                 apdu.setOutgoingAndSend((short)0, (short)5);
                 return;
             case DO_ALG_ATTR_DEC:
-                Util.arrayCopy(algAttrDec, (short)2, buffer, (short)0, (short)5);
+                Util.arrayCopy(algAttrDec, (short)2, buffer, (short)0,(short) (algAttrDec.length - 2));
                 apdu.setOutgoingAndSend((short)0, (short)5);
                 return;
             case DO_ALG_ATTR_AUTH:
-                Util.arrayCopy(algAttrAuth, (short)2, buffer, (short)0, (short)5);
+                Util.arrayCopy(algAttrAuth, (short)2, buffer, (short)0, (short) (algAttrAuth.length - 2));
                 apdu.setOutgoingAndSend((short)0, (short)5);
                 return;
             case DO_CHV_STATUS:
@@ -583,11 +587,11 @@ public class MyPGPid extends Applet {
 
         Util.arrayCopy(extendedCap, (short)0, buffer, (short)len, (short) extendedCap.length);
         len += (short) extendedCap.length;
-        Util.arrayCopy(algAttrSign, (short)0, buffer, (short)len, (short)7);
+        Util.arrayCopy(algAttrSign, (short)0, buffer, (short)len, (short) algAttrSign.length);
         len += 7;
-        Util.arrayCopy(algAttrDec, (short)0, buffer, (short)len, (short)7);
+        Util.arrayCopy(algAttrDec, (short)0, buffer, (short)len, (short) algAttrDec.length);
         len += 7;
-        Util.arrayCopy(algAttrAuth, (short)0, buffer, (short)len, (short)7);
+        Util.arrayCopy(algAttrAuth, (short)0, buffer, (short)len, (short) algAttrAuth.length);
         len += 7;
         buffer[len++] = (byte)0xc4;
         buffer[len++] = (byte)0x7;
@@ -901,7 +905,7 @@ public class MyPGPid extends Applet {
      * the array specified by the buffer argument.
      * If the number of bytes to send as specified by the len parameter is
      * greater the 254, this method will automatically generate 61xx status
-     * bytes in the response to indicate more data avaible by GET_RESPONSE.
+     * bytes in the response to indicate more data available by GET_RESPONSE.
      * If the length is such as 61xx status is generated the data to be sent
      * MUST be located in tmpData, and tmpData MUST NOT be modified until all
      * data has been fetched or a command other the GET_RESPONSE is issued from

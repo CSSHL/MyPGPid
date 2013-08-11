@@ -6,8 +6,12 @@ card_connect -readerNumber 0
 select -AID a000000003000000
 open_sc -security 1 -keyind 0 -keyver 0 -mac_key 404142434445464748494a4b4c4d4e4f -enc_key 404142434445464748494a4b4c4d4e4f
 
-delete -AID F94D7950475069640000
+# older version of applet 1.1
+delete -AID D2760001240101010000000000010000
 delete -AID D276000124010101
+# current version of applet 2.0
+delete -AID D2760001240102000000000000010000
+delete -AID D276000124010200
 
 
 install -file ../build/classes/MyPGPid/javacard/MyPGPid.cap -sdAID a000000003000000 -priv 00 -nvDataLimit 6000
