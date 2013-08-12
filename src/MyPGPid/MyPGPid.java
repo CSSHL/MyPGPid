@@ -137,7 +137,7 @@ public class MyPGPid extends Applet {
     // extendedCap[3] == 0x10 (Status byte changeable only) 
     // extendedCap[3] == 0x34 (Support for Key Import, Status byte changeable only, Algorithm attributes changeable) 
     // extendedCap[3] == 0xB4 (Secure Messaging supported, Support for Key Import, Status byte changeable only, Algorithm attributes changeable) 
-    private byte[] extendedCap = { (byte)0xc0, (byte)0x0a, (byte)0x10, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0xFF, (byte)0x00, (byte)0xFF};
+    private byte[] extendedCap = { (byte)0xc0, (byte)0x0a, (byte)0x34, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0xFF, (byte)0x00, (byte)0xFF};
     // BUGBUG: algAttrSign[7] == 0x01 will cause general fail during key generation (in PGP) 
 //    private byte[] algAttrSign = { (byte)0xc1, (byte)0x06, (byte)0x01,(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
 //    private byte[] algAttrDec = { (byte)0xc2, (byte)0x06, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x01};
@@ -146,7 +146,7 @@ public class MyPGPid extends Applet {
     private byte[] algAttrDec = { (byte)0xc2, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20};
     private byte[] algAttrAuth = { (byte)0xc3, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20};
     // Card capabilities are encoded in historical bytes as defined 8.3.6 Card capabilities (http://www.cardwerk.com/smartcards/smartcard_standard_ISO7816-4_8_historical_bytes.aspx)
-    private byte[] histBytes = { (byte)0x80, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x40}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities & 3bytes length, 0x40 == extended lc/le supported
+    private byte[] histBytes = { (byte)0x00, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x40, (byte)0x00, (byte)0x90, (byte)0x00}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities & 3bytes length, 0x40 == extended lc/le supported, 0x00 == status indicator (Card does not offer life cycle management), 90 00 status OK
     private DataObject fingerprints;
     private DataObject fingerprintsCA;
     private DataObject dateGeneration;
@@ -360,6 +360,7 @@ public class MyPGPid extends Applet {
                getData(apdu);
                return;
             case PUT_DATA:
+            case PUT_DATA + 1:
                 putData(apdu);
                 return;
             case VERIFY:
