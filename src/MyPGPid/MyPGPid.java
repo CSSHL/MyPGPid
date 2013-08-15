@@ -44,6 +44,13 @@ public class MyPGPid extends Applet {
     // Odd high nibble in CLA means 'chaining'
     final static byte CLA_CARD_TEST               = (byte) 0xE0;
 
+    final static byte CLA_CARD_NOCHAIN_NOSM       = (byte) 0x00;
+    final static byte CLA_CARD_SM                 = (byte) 0x0C;
+    final static byte CLA_CARD_CHAIN_NOSM         = (byte) 0x10;
+    final static byte CLA_CARD_CHAIN_SM           = (byte) 0x1C;
+    final static byte CLA_CHAINING                = (byte) 0x10;
+    
+    
     /* Commands from terminal */
     final static byte PGP_CLA = (byte)0x00;
     final static byte SELECT_FILE = (byte)0x20;
@@ -52,6 +59,7 @@ public class MyPGPid extends Applet {
     final static byte CHANGE_REFERENCE_DATA = (byte)0x24;
     final static byte RESET_RETRY_COUNTER = (byte)0x2c;
     final static byte PUT_DATA = (byte)0xda;
+    final static byte PUT_DATA_CHAINING = (byte)0xdb;
     final static byte GENERATE_ASYMMETRIC_KEY_PAIR = (byte)0x47;
     final static byte PERFORM_SECURITY_OPERATION = (byte)0x2a;
     final static byte INTERNAL_AUTHENTICATE = (byte)0x88;
@@ -102,7 +110,9 @@ public class MyPGPid extends Applet {
     final static short DO_PRIVATE_SIGNATURE_KEY = (short)0x00e0;
     final static short DO_PRIVATE_DECRYPTION_KEY = (short)0x00e1;
     final static short DO_PRIVATE_AUTHENTIFICATION__KEY = (short)0x00e2;
+    final static short DO_KEY_IMPORT = (short)0x3fff;
 
+        
     /* Response codes */
     final static short SW_PIN_BLOCKED = (short)0x6983;
     final static short SW_REFERENCED_DATA_NOT_FOUND = (short)0x6a88;
@@ -146,7 +156,9 @@ public class MyPGPid extends Applet {
     private byte[] algAttrDec = { (byte)0xc2, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20};
     private byte[] algAttrAuth = { (byte)0xc3, (byte)0x05, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20};
     // Card capabilities are encoded in historical bytes as defined 8.3.6 Card capabilities (http://www.cardwerk.com/smartcards/smartcard_standard_ISO7816-4_8_historical_bytes.aspx)
-    private byte[] histBytes = { (byte)0x00, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x40, (byte)0x00, (byte)0x90, (byte)0x00}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities & 3bytes length, 0x40 == extended lc/le supported, 0x00 == status indicator (Card does not offer life cycle management), 90 00 status OK
+    //private byte[] histBytes = { (byte)0x00, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x40, (byte)0x00, (byte)0x90, (byte)0x00}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities & 3bytes length, 0x40 == extended lc/le supported, 0x00 == status indicator (Card does not offer life cycle management), 90 00 status OK
+    private byte[] histBytes = { (byte)0x00, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x80, (byte)0x00, (byte)0x90, (byte)0x00}; // 0x80 == COMPACT-TLV, 0x73 == Card capabilities & 3bytes length, 0x80 == command chaining supported, 0x00 == status indicator (Card does not offer life cycle management), 90 00 status OK
+    //private byte[] histBytes = { (byte)0x00, (byte)0x73, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x90, (byte)0x00}; // this will fail (gpg keytocard) as neither extended apdu, nor command chaining is declared for support 0x80 == COMPACT-TLV, 0x73 == Card capabilities & 3bytes length, 0x00 == extended lc/le supported, 0x00 == status indicator (Card does not offer life cycle management), 90 00 status OK
     private DataObject fingerprints;
     private DataObject fingerprintsCA;
     private DataObject dateGeneration;
@@ -166,6 +178,7 @@ public class MyPGPid extends Applet {
     private byte[] tmpData;
     private short remainingDataLength = 0;
     private short remainingDataOffset = 0;
+    private short incomingDataOffset = 0;
     private boolean chv = false;
     private short bNotExported = 0x55;
     
@@ -323,6 +336,7 @@ public class MyPGPid extends Applet {
         chv3.reset();
         remainingDataLength = 0;
         remainingDataOffset = 0;
+        incomingDataOffset = 0;
     }
 
     public boolean select() {
@@ -360,8 +374,10 @@ public class MyPGPid extends Applet {
                getData(apdu);
                return;
             case PUT_DATA:
-            case PUT_DATA + 1:
                 putData(apdu);
+                return;
+            case PUT_DATA_CHAINING:
+                putDataChaining(apdu);
                 return;
             case VERIFY:
                 if (buffer[ISO7816.OFFSET_P1] != 0) { ISOException.throwIt(ISO7816.SW_WRONG_P1P2); }
@@ -602,7 +618,7 @@ public class MyPGPid extends Applet {
         len = dateGeneration.getTlv(buffer, len);
         return len;
     }
-
+    
     private void putData(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         short p1p2 = Util.makeShort(buffer[ISO7816.OFFSET_P1], buffer[ISO7816.OFFSET_P2]);
@@ -611,11 +627,18 @@ public class MyPGPid extends Applet {
         short len;
 
         len = receiveData(apdu, tmpData);
+        
+        putData(tmpData, len, p1p2);
+    }
+
+    private void putData(byte[] data, short dataLen, short p1p2) {
+        
+        
         if (p1p2 == DO_OPTIONAL1) {
             if (!chv2.isValidated()) {
                 ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
             } else {
-                optionalData1.setData(tmpData, len);
+                optionalData1.setData(data, dataLen);
                 return;
             }
         }
@@ -623,7 +646,7 @@ public class MyPGPid extends Applet {
             if (!chv2.isValidated()) {
                 ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
             } else {
-                optionalData3.setData(tmpData, len);
+                optionalData3.setData(data, dataLen);
                 return;
             }
         }
@@ -633,93 +656,116 @@ public class MyPGPid extends Applet {
         }
         switch (p1p2) {
             case DO_NAME:
-                name.setData(tmpData, len);
+                name.setData(data, dataLen);
                 return;
             case DO_LOGIN_DATA:
-                loginData.setData(tmpData, len);
+                loginData.setData(data, dataLen);
                 return;
             case DO_LANGUAGE:
-                langPref.setData(tmpData, len);
+                langPref.setData(data, dataLen);
                 return;
             case DO_SEX:
-                sex.setData(tmpData, len);
+                sex.setData(data, dataLen);
                 return;
             case DO_URL:
-                url.setData(tmpData, len);
+                url.setData(data, dataLen);
                 return;
             case DO_CHV_STATUS:
-                if (len != 1) {
+                if (dataLen != 1) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                if (tmpData[0] > (byte)1 || tmpData[0] < (byte)0) {
+                if (data[0] > (byte)1 || data[0] < (byte)0) {
                     ISOException.throwIt(ISO7816.SW_DATA_INVALID);
                 }
-                chv = (tmpData[0] ==  1);
+                chv = (data[0] ==  1);
                 return;
             case DO_FINGERPRINT_SIGN:
-                if (len != (short)20) {
+                if (dataLen != (short)20) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                fingerprints.setData(tmpData, (short)0, len);
+                fingerprints.setData(data, (short)0, dataLen);
                 return;
             case DO_FINGERPRINT_DEC:
-                if (len != (short)20) {
+                if (dataLen != (short)20) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                fingerprints.setData(tmpData, (short)20, len);
+                fingerprints.setData(data, (short)20, dataLen);
                 return;
             case DO_FINGERPRINT_AUTH:
-                if (len != (short)20) {
+                if (dataLen != (short)20) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                fingerprints.setData(tmpData, (short)40, len);
+                fingerprints.setData(data, (short)40, dataLen);
                 return;
             case DO_CA_FINGERPRINT1:
-                if (len != (short)20) {
+                if (dataLen != (short)20) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                fingerprintsCA.setData(tmpData, (short)0, len);
+                fingerprintsCA.setData(data, (short)0, dataLen);
                 return;
             case DO_CA_FINGERPRINT2:
-                if (len != (short)20) {
+                if (dataLen != (short)20) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                fingerprintsCA.setData(tmpData, (short)20, len);
+                fingerprintsCA.setData(data, (short)20, dataLen);
                 return;
             case DO_CA_FINGERPRINT3:
-                if (len != (short)20) {
+                if (dataLen != (short)20) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                fingerprints.setData(tmpData, (short)40, len);
+                fingerprints.setData(data, (short)40, dataLen);
                 return;
             case DO_GENERATION_DATE_SIGN:
-                if (len != (short)4) {
+                if (dataLen != (short)4) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                dateGeneration.setData(tmpData, (short)0, len);
+                dateGeneration.setData(data, (short)0, dataLen);
                 return;
             case DO_GENERATION_DATE_DEC:
-                if (len != (short)4) {
+                if (dataLen != (short)4) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                dateGeneration.setData(tmpData, (short)4, len);
+                dateGeneration.setData(data, (short)4, dataLen);
                 return;
             case DO_GENERATION_DATE_AUTH:
-                if (len != (short)4) {
+                if (dataLen != (short)4) {
                     ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
                 }
-                dateGeneration.setData(tmpData, (short)8, len);
+                dateGeneration.setData(data, (short)8, dataLen);
                 return;
             case DO_OPTIONAL2:
-                optionalData2.setData(tmpData, len);
+                optionalData2.setData(data, dataLen);
                 return;
             case DO_OPTIONAL4:
-                optionalData4.setData(tmpData, len);
+                optionalData4.setData(data, dataLen);
                 return;
+            case DO_KEY_IMPORT:
+                importKey(data, (short) 0, dataLen);
             default:
                 ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
     }
+    
+    private void putDataChaining(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        short dataLen = apdu.setIncomingAndReceive();
+        
+        Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, tmpData, incomingDataOffset, dataLen);
+        incomingDataOffset += (short) (dataLen - ISO7816.OFFSET_CDATA);
+        if ((buffer[ISO7816.OFFSET_CLA] & CLA_CHAINING) == CLA_CHAINING) {
+            // First chaining command should arive when incomingDataOffset == 0 (BUGBUG: should be checked against expected CLA/INS)
+            // Second... chainig command will have incomingDataOffset > 0
+            
+            // Wait for next chaining command
+        }
+        else {
+            // Either last command in chain or simple command
+            // Execute PUT DATA
+            short p1p2 = Util.makeShort(buffer[ISO7816.OFFSET_P1], buffer[ISO7816.OFFSET_P2]);
+            putData(tmpData, incomingDataOffset, p1p2);
+        }
+    }
+    
 
     private void generateAssymetricKeyPair(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
@@ -984,6 +1030,131 @@ public class MyPGPid extends Applet {
         }
         return len;
     }
+    
+    private short parseTLVLength(byte[] data, short dataOffset, short[] result) {
+        if (data[dataOffset] == (byte) 0x81) {
+            result[0] = data[(short) (dataOffset + 1)];
+            return (short) (dataOffset + 2);
+        }
+        else {
+            if (data[dataOffset] == (byte) 0x82) {
+                result[0] = Util.makeShort(data[(short) (dataOffset + 1)], data[(short)(dataOffset + 2)]);
+                return (short) (dataOffset + 3);
+            }
+            else { ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 2)); }
+        }     
+        return dataOffset;
+    }
+    private void importKey(byte[] data, short dataOffset, short dataLen) {
+/*
+4d           82 01 76           b6 00      7f 48 08     91 64            92 81 80 93 81 80 5f 48      82 01 64         
+| exthdrlist |datalength=0x0176 |sign key  | privktempl |exponentlen 64B |p len   |q len   |priv key  | tag total length=0x0164
+ 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 01 {Public exponent: e, length 0x64B}
+dc 0b 08 85 ac a0 20 a0 cb 3c 26 00 bc 0b 40 a1 0c 04 77 1f 00 74 91 24 2b 99 c8 e2 a0 10 d7 50 5a 75 9a 47 90 1b 44 79 ca 5b b5 20 df 9a 48 d4 16 b2 3c 8f 06 03 68 f0 45 1d 3e 1c 5d 22 b7 c1 ba f5 55 f4 23 30 30 76 08 99 c6 64 5f a7 31 85 dd 4f b8 1b 5d 20 13 6d c1 69 fb 52 2a 19 53 a9 c4 cc 0b e7 84 42 fb 61 f7 b2 f7 69 45 ae 51 ba be 9d 80 01 73 af dc 28 fd 87 87 64 db 28 83 a5 {Prime1: p, length 0x80 == 128B}
+ec 81 7e da e8 ae 29 4d 0b c6 06 d5 56 9b 06 72 cc 29 16 7d 3d 94 68 1f 2c f4 af 72 69 a9 96 9b 2b e0 48 da d8 ae c9 a9 a6 08 b2 37 27 07 7f e4 86 ed 40 9e 38 6d a3 69 91 e9 03 fc 3d 64 ad eb df 65 07 a8 6e 9f 2e 8e 44 cc 5c b5 01 a0 17 71 55 f6 37 e7 b1 4f 79 ed e4 b0 a9 7c 46 7a 48 00 7a eb 8e 7e 97 b6 74 47 a5 69 4f 41 2a 58 ec b6 73 d2 d2 43 69 88 bb d2 22 85 1c 89 96 46 8e e5 {Prime2: q, length 0x80 == 128B} 
+ */        
+        if (data[dataOffset] != 0x4d) { ISOException.throwIt( ISO7816.SW_WRONG_DATA); } // check extended header list tag
+        dataOffset++;
+        short dataLength = 0;
+        if (data[dataOffset] == (byte) 0x81) {
+            dataLength = data[(short) (dataOffset + 1)];
+            dataOffset += 2;
+        }
+        else {
+            if (data[dataOffset] == (byte) 0x82) {
+                dataLength = Util.makeShort(data[(short) (dataOffset + 1)], data[(short)(dataOffset + 2)]);
+                dataOffset += 3;
+            }
+            else ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 2));
+        }
+        short keyType = Util.makeShort(data[dataOffset], data[(short)(dataOffset + 1)]);
+        dataOffset += 2;
+        if (data[dataOffset] != (byte) 0x7f || data[(short) (dataOffset + 1)] != (byte) 0x48) { ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 3)); } // check private key template tag
+        dataOffset += 2;
+        if (data[dataOffset] != (byte) 0x08) { ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 4)); } // check expected length
+        dataOffset++; 
+        if (data[dataOffset] != (byte) 0x91) { ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 5)); } // check exponent length tag
+        dataOffset++; 
+        short exponentLength = data[dataOffset];
+        dataOffset++; 
+        if (data[dataOffset] != (byte) 0x92) { ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 6)); } // check prime P length tag
+        dataOffset++; 
+        short primePLength = 0;
+        if (data[dataOffset] == (byte) 0x81) {
+            primePLength = data[(short) (dataOffset + 1)];
+            dataOffset += 2;
+        }
+        else {
+            if (data[dataOffset] == (byte) 0x82) {
+                primePLength = Util.makeShort(data[(short) (dataOffset + 1)], data[(short)(dataOffset + 2)]);
+                dataOffset += 3;
+            }
+            else ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 7));
+        }
+        if (data[dataOffset] != (byte) 0x93) { ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 8)); } // check prime Q length tag
+        dataOffset++; 
+        short primeQLength = 0;
+        if (data[dataOffset] == (byte) 0x81) {
+            primeQLength = data[(short) (dataOffset + 1)];
+            dataOffset += 2;
+        }
+        else {
+            if (data[dataOffset] == (byte) 0x82) {
+                primeQLength = Util.makeShort(data[(short) (dataOffset + 1)], data[(short)(dataOffset + 2)]);
+                dataOffset += 3;
+            }
+            else ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 9));
+        }
+        if (data[dataOffset] != 0x5f || data[(short) (dataOffset + 1)] != 0x48) { ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 0x0a)); } // check private key tag
+        dataOffset += 2;
+        
+        if (data[dataOffset] == (byte) 0x81) {
+            dataLength = data[(short) (dataOffset + 1)];
+            dataOffset += 2;
+        }
+        else {
+            if (data[dataOffset] == (byte) 0x82) {
+                dataLength = Util.makeShort(data[(short) (dataOffset + 1)], data[(short)(dataOffset + 2)]);
+                dataOffset += 3;
+            }
+            else ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 0x0b));
+        }
+        
+        if (primePLength != primeQLength) {ISOException.throwIt((short) (ISO7816.SW_WRONG_DATA + 0x0c));}
+/*        
+        RSAPrivateCrtKey privKey = null;
+        RSAPublicKey pubKey = null;
+        switch(keyType) {
+            case (short)0xb600:
+                privKey = (RSAPrivateCrtKey)keySign.getPrivate();
+                pubKey = (RSAPublicKey)keySign.getPublic();
+                break;
+            case (short)0xb800:
+                privKey = (RSAPrivateCrtKey)keyDecrypt.getPrivate();
+                pubKey = (RSAPublicKey)keySign.getPublic();
+                break;
+            case (short)0xa400:
+                privKey = (RSAPrivateCrtKey)keyAuth.getPrivate();
+                pubKey = (RSAPublicKey)keySign.getPublic();
+                break;
+            default:
+                ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+        }        
+       
+        // Set exponent
+        pubKey.setExponent(data, dataOffset, exponentLength);
+        dataOffset += exponentLength;
+        
+        // Set prime P
+        privKey.setP(data, dataOffset, primePLength);
+        dataOffset += exponentLength;
+        
+        // Set prime Q
+        privKey.setQ(data, dataOffset, primeQLength);
+        dataOffset += exponentLength;
+*/        
+    }    
 /*
     private void exportKeyPair(APDU apdu) {
         // Help export function for private key!!!
